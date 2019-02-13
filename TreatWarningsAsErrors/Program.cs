@@ -1,8 +1,8 @@
 ﻿using System;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
-using System.Net;
+using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace TreatWarningsAsErrors
@@ -19,6 +19,8 @@ namespace TreatWarningsAsErrors
 
         static void UpdateProjects(bool remove, bool dryrun)
         {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
             string[] files = Directory.GetFiles(".", "*.*proj", SearchOption.AllDirectories)
                 .Select(f => f.StartsWith(@".\") ? f.Substring(2) : f)
                 .ToArray();
@@ -27,7 +29,16 @@ namespace TreatWarningsAsErrors
             foreach (string filename in files)
             {
                 Log($"Reading: '{filename}'");
-                XDocument xdoc = XDocument.Load(filename);
+                XDocument xdoc;
+                try
+                {
+                    xdoc = XDocument.Load(filename);
+                }
+                catch (System.Xml.XmlException ex)
+                {
+                    Log($"Couldn't read project file: '{filename}'{Environment.NewLine}{ex.Message}");
+                    continue;
+                }
 
                 bool modified = false;
 
@@ -80,9 +91,24 @@ namespace TreatWarningsAsErrors
                     }
                     else
                     {
-                        xdoc.Save(filename);
+                        SaveXmlDocument(filename, xdoc);
                     }
                 }
+            }
+        }
+
+        static void SaveXmlDocument(string filename, XDocument xdoc)
+        {
+            XmlWriterSettings settings = new XmlWriterSettings
+            {
+                Indent = true,
+                Encoding = new UTF8Encoding(false),
+                OmitXmlDeclaration = true
+            };
+
+            using (var writer = XmlWriter.Create(filename, settings))
+            {
+                xdoc.Save(writer);
             }
         }
 
